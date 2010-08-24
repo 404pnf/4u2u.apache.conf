@@ -1,8 +1,0 @@
-<VirtualHost *:80>
-        ServerName book.2u4u.com.cn
-        DocumentRoot /var/www/html/book/
-        ErrorLog /var/log/httpd/book_error_log
-        LogLevel warn
-#CBandRemoteSpeed 10Kb/s  90 30
-#CustomLog /backup/apache.access.log common env=!dontlog
-</VirtualHost>
