@@ -1,0 +1,206 @@
+<VirtualHost *:80>
+        ServerName  babel.2u4u.com.cn
+        DocumentRoot /var/www/html/2u4u
+        ErrorLog /var/log/httpd/zuowen_error_log
+        LogLevel warn
+# Mark requests from the loop-back interface
+SetEnvIf Remote_Addr "127\.0\.0\.1" dontlog
+# Mark requests for the robots.txt file
+SetEnvIf Request_URI "^/robots\.txt$" dontlog
+# Log what remains
+#CustomLog /backup/apache.access.log common env=!dontlog
+
+# Requires mod_expires to be enabled.
+# bxy temporarily disable this, the following directive only alow ONE ip address to request ONE object per time, this is not right!
+# CBandRemoteSpeed 100Kb/s  90 30
+
+
+
+   ###########################  Cache Settings ################################
+<IfModule mod_expires.c>
+  # Enable expirations.
+  ExpiresActive On
+
+  # Cache all files for 2 weeks after access (A).
+  ExpiresDefault A360
+
+
+ # 现在本地js页缓存到2013，包括一个google analytic文件。这样不太好吧 
+ # 是否这样，观察一段。不行就还是用filematch的方法，对css和ico缓存一年，对js缓存一周
+
+
+#这里必须用filematch命令，如果不用，下面的对text/html单独做的缓存规则不会生效
+#也就是说。这里如果用了全局，那么下面的text/html也继承了全局设定！！
+#非常奇怪！！
+# 参考文档： http://httpd.apache.org/docs/2.0/mod/mod_headers.html#header
+<FilesMatch "\.(js|ico|pdf|flv|jpg|jpeg|png|gif|mp3|mp4)$">
+
+Header unset Pragma
+FileETag None
+Header unset ETag
+Header set Cache-Control "public, no-transform"
+Header set Expires "Thu, 15 Apr 2013 20:00:00 GMT"
+Header unset Last-Modified
+# Header append Cache-Control "public"
+</FilesMatch>
+
+
+  # Do not cache dynamically generated pages.
+  ExpiresByType text/html A1
+
+
+</IfModule>
+
+
+ ############################### compression settings  #######################
+# 压缩 html js css 文件后再传输
+# 这是根据文件名结尾来判定是否压缩
+# 因为drupal输出地html文件都是没有后缀的，因此这个规则不能捕获node/3这种html文件
+# 因此我改为使用下面的全局指令
+<FilesMatch "\.(html|js??|css??)$">
+SetOutputFilter DEFLATE
+</FilesMatch>
+DeflateCompressionLevel 2
+
+# http://httpd.apache.org/docs/2.0/mod/mod_deflate.html
+# Compression is implemented by the DEFLATE filter. The following directive will enable compression for documents in the container where it is placed:
+# bxy   i put this in vitualhost location, so it's global
+SetOutputFilter DEFLATE
+#Compress only a few types
+# 这里不要用 text/plain 因为这个hhttp.conf中defaulttype text/plain
+# 也就是说，当apache不知道一个文件的mine的时候，就芮乃伟它是text/plain
+# 很可能我哪里设置不对，让apache不知道.zip是zip而文件而当做text/plain送出
+# 结果是就是ie在这种情况下下载了该zip文件就不能打开，报错。非ie浏览器就没问题`
+AddOutputFilterByType DEFLATE text/html text/xml 
+# bxy 压缩级别 1-9 9最高
+DeflateCompressionLevel 2
+
+<Directory /var/www/html/2u4u>
+EnableSendfile on
+<IfModule mod_rewrite.c>
+  RewriteEngine on
+  RewriteBase /
+
+  ########################### BOOST START ##########################################
+  AddDefaultCharset utf-8
+  <FilesMatch "(\.html|\.html\.gz)$">
+    <IfModule mod_headers.c>
+      Header set Expires "Sun, 19 Nov 2008 05:00:00 GMT"
+      #Header set Cache-Control "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
+      Header set Cache-Control "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
+      Header set X-Header "Boost Citrus 1.8"
+    </IfModule>
+  </FilesMatch>
+  <IfModule mod_mime.c>
+    AddCharset utf-8 .html
+    AddCharset utf-8 .css
+    AddCharset utf-8 .js
+    AddEncoding gzip .gz
+  </IfModule>
+  <FilesMatch "(\.html|\.html\.gz)$">
+    ForceType text/html
+  </FilesMatch>
+  <FilesMatch "(\.js|\.js\.gz)$">
+    ForceType text/javascript
+  </FilesMatch>
+  <FilesMatch "(\.css|\.css\.gz)$">
+    ForceType text/css
+  </FilesMatch>
+
+  # Gzip Cookie Test
+  RewriteRule boost-gzip-cookie-test\.html  cache/perm/boost-gzip-cookie-test\.html\.gz [L,T=text/html]
+
+  # GZIP - Cached css & js files
+  RewriteCond %{HTTP_COOKIE} !(boost-gzip)
+  RewriteCond %{HTTP:Accept-encoding} !gzip
+  RewriteRule .* - [S=2]
+  RewriteCond %{DOCUMENT_ROOT}/cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.css\.gz -s
+  RewriteRule .* cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.css\.gz [L,QSA,T=text/css]
+  RewriteCond %{DOCUMENT_ROOT}/cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.js\.gz -s
+  RewriteRule .* cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.js\.gz [L,QSA,T=text/javascript]
+
+  # NORMAL - Cached css & js files
+  RewriteCond %{DOCUMENT_ROOT}/cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.css -s
+  RewriteRule .* cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.css [L,QSA,T=text/css]
+  RewriteCond %{DOCUMENT_ROOT}/cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.js -s
+  RewriteRule .* cache/perm/%{SERVER_NAME}%{REQUEST_URI}_\.js [L,QSA,T=text/javascript]
+
+  # Caching for anonymous users
+  # Skip boost IF not get request OR uri has wrong dir OR cookie is set OR request came from this server OR https request
+  RewriteCond %{REQUEST_METHOD} !^(GET|HEAD)$ [OR]
+  RewriteCond %{REQUEST_URI} (^/(admin|cache|misc|modules|sites|system|openid|themes|node/add))|(/(comment/reply|edit|user|user/(login|password|register))$) [OR]
+  RewriteCond %{HTTP_COOKIE} DRUPAL_UID [OR]
+  RewriteCond %{HTTP:Pragma} no-cache [OR]
+  RewriteCond %{HTTP:Cache-Control} no-cache [OR]
+  RewriteCond %{HTTPS} on
+  RewriteRule .* - [S=3]
+
+  # GZIP
+  RewriteCond %{HTTP_COOKIE} !(boost-gzip)
+  RewriteCond %{HTTP:Accept-encoding} !gzip
+  RewriteRule .* - [S=1]
+  RewriteCond %{DOCUMENT_ROOT}/cache/normal/%{SERVER_NAME}%{REQUEST_URI}_%{QUERY_STRING}\.html\.gz -s
+  RewriteRule .* cache/normal/%{SERVER_NAME}%{REQUEST_URI}_%{QUERY_STRING}\.html\.gz [L,T=text/html]
+
+  # NORMAL
+  RewriteCond %{DOCUMENT_ROOT}/cache/normal/%{SERVER_NAME}%{REQUEST_URI}_%{QUERY_STRING}\.html -s
+  RewriteRule .* cache/normal/%{SERVER_NAME}%{REQUEST_URI}_%{QUERY_STRING}\.html [L,T=text/html]
+
+  ### BOOST END ###
+
+
+
+  ###################  drupal default rewrite #####################
+  # bxy  drupal's default rewrite rules for apache
+  # Rewrite URLs of the form 'x' to the form 'index.php?q=x'.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !=/favicon.ico
+  RewriteRule ^(.*)$ index.php?q=$1 [L,QSA]
+
+
+  ################### css gzip rewrite rules ############################
+
+# copy from README in  css gzip module
+# Certian hosts do not like mutiple .htaccess files. To get around this issue you need to copy the text below into drupal's root .htaccess file, and enable the "GZip CSS: Do not generate .htaccess file" checkbox.
+# Add this Inside the <IfModule mod_rewrite.c> block, right before </IfModule> (add it to the bottom)
+
+  ### START CSS GZIP ###
+  # Requires mod_mime to be enabled.
+  <IfModule mod_mime.c>
+    # Send any files ending in .gz with x-gzip encoding in the header.
+    AddEncoding gzip .gz
+  </IfModule>
+  # Gzip compressed css files are of the type 'text/css'.
+  <FilesMatch "\.css\.gz$">
+    ForceType text/css
+  </FilesMatch>
+  <IfModule mod_rewrite.c>
+    RewriteEngine on
+    # Serve gzip compressed css files
+    RewriteCond %{HTTP:Accept-encoding} gzip
+    RewriteCond %{REQUEST_FILENAME}\.gz -s
+    RewriteRule ^(.*)\.css $1\.css\.gz [L,QSA,T=text/css]
+  </IfModule>
+  ### End CSS GZIP ###
+
+</IfModule>
+
+  ###   To redirect all users to access the site WITHOUT the 'www.' prefix,
+  # (http://www.example.com/... will be redirected to http://example.com/...)
+  # uncomment and adapt the following:
+  # RewriteCond %{HTTP_HOST} ^www\.2u4u\.com\.cnNC]
+  # RewriteRule ^(.*)$ http://2u4u.com.cn/$1 [L,R=301]
+  # baixy: i use a vitualhost www.2u4u.com.cn 
+  # to redirect all the url to 2u4u.com.cn
+  # it's much faster and search engine friendly!
+  # see: http://blog.nearlyfreespeech.net/2006/11/17/forwarding-sites-url-rewriting/
+</Directory>
+
+<Directory /var/www/2u4u/sites/babel.2u4u.com.cn/files/>
+SetHandler Drupal_Security_Do_Not_Remove_See_SA_2006_006
+Options None
+Options +FollowSymLinks
+</Directory>
+
+</VirtualHost>

@@ -1,0 +1,18 @@
+<VirtualHost *:80>
+        ServerName  u.2u4u.com.cn
+        DocumentRoot /var/www/html/ucenter
+        ErrorLog /var/log/httpd/test_error_log
+        LogLevel warn
+
+# Mark requests from the loop-back interface
+SetEnvIf Remote_Addr "127\.0\.0\.1" dontlog
+# Mark requests for the robots.txt file
+SetEnvIf Request_URI "^/robots\.txt$" dontlog
+# Log what remains
+CustomLog /backup/u.2u4u.com.cn.access.log common env=!dontlog
+
+<Directory /var/www/html/ucenter>
+  RewriteEngine on
+</Directory>
+#CBandRemoteSpeed 10Kb/s  90 30
+</VirtualHost>

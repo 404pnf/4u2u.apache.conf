@@ -1,0 +1,7 @@
+<VirtualHost *:80>
+        ServerName  gps.2u4u.com.cn
+        DocumentRoot /var/www/html/gps
+        #PHPINIDir /var/www/html/gps/
+        ErrorLog /var/log/httpd/gps_error.log
+        LogLevel warn
+</VirtualHost>
